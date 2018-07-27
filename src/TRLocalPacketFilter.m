@@ -43,6 +43,9 @@
 #import <errno.h>
 #import <assert.h>
 
+#import "TRLog.h"
+#import "xmalloc.h"
+
 
 /* Private Methods */
 

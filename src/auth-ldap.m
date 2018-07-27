@@ -172,7 +172,7 @@ static TRString *createSearchFilter(TRString *template, const char *username) {
 static BOOL pf_open(struct ldap_ctx *ctx) {
     TRString *tableName;
     TRLDAPGroupConfig *groupConfig;
-    TREnumerator *groupIter;
+    TREnumerator *groupIter = nil;
     pferror_t pferror;
 
     /* Acquire a reference to /dev/pf */
@@ -202,6 +202,7 @@ static BOOL pf_open(struct ldap_ctx *ctx) {
                 }
             }
         }
+	[groupIter release];
     }
 
     return YES;
@@ -209,6 +210,8 @@ static BOOL pf_open(struct ldap_ctx *ctx) {
     error:
     [ctx->pf release];
     ctx->pf = NULL;
+    if(groupIter != nil)
+        [groupIter release];
     return NO;
 }
 #endif /* HAVE_PF */
@@ -358,10 +361,10 @@ static BOOL auth_ldap_user(TRLDAPConnection *ldap, TRAuthLDAPConfig *config, TRL
     if (!authConn) {
         return NO;
     }
-
+    
     /* Allocate the string to pass to bindWithDN */
     passwordString = [[TRString alloc] initWithCString: password];
-
+    
     if ([authConn bindWithDN: [ldapUser dn] password: passwordString]) {
         result = YES;
     }
@@ -372,11 +375,12 @@ static BOOL auth_ldap_user(TRLDAPConnection *ldap, TRAuthLDAPConfig *config, TRL
     return result;
 }
 
-static TRLDAPGroupConfig *find_ldap_group(TRLDAPConnection *ldap, TRAuthLDAPConfig *config, TRLDAPEntry *ldapUser) {
+static TRArray *find_ldap_group(TRLDAPConnection *ldap, TRAuthLDAPConfig *config, TRLDAPEntry *ldapUser) {
     TREnumerator *groupIter;
+    TRArray *resultGroupIter;
     TRLDAPGroupConfig *groupConfig;
     TRArray *ldapEntries;
-    TREnumerator *entryIter;
+    TREnumerator *entryIter = nil;
     TRLDAPEntry *entry;
     TRLDAPGroupConfig *result = nil;
     int userNameLength;
@@ -387,6 +391,7 @@ static TRLDAPGroupConfig *find_ldap_group(TRLDAPConnection *ldap, TRAuthLDAPConf
      * "first match". Thusly, we'll walk the stack from the bottom up.
      */
     groupIter = [[config ldapGroups] objectReverseEnumerator];
+    resultGroupIter = [[TRArray alloc] init];
 
     while ((groupConfig = [groupIter nextObject]) != nil) {
 
@@ -398,7 +403,7 @@ static TRLDAPGroupConfig *find_ldap_group(TRLDAPConnection *ldap, TRAuthLDAPConf
 
         /* Error occured, all stop */
         if (!ldapEntries)
-            break;
+            continue;
 
         /* If RFC2307BIS flag is true, search for full DN, otherwise just search for uid */
         TRString *searchValue = [groupConfig memberRFC2307BIS] ? [ldapUser dn] : [ldapUser rdn];
@@ -412,28 +417,36 @@ static TRLDAPGroupConfig *find_ldap_group(TRLDAPConnection *ldap, TRAuthLDAPConf
             if ((![groupConfig useCompareOperation] && [ldap searchWithFilter: searchFilter scope: LDAP_SCOPE_SUBTREE baseDN: [entry dn] attributes: NULL]) ||
                 ([groupConfig useCompareOperation] && [ldap compareDN: [entry dn] withAttribute: [groupConfig memberAttribute] value: searchValue])) {
                 /* Group match! */
+		[resultGroupIter addObject: groupConfig];
                 result = groupConfig;
             }
         }
+	[entryIter release];
 
-        if (result)
-            break;
+        //if (result)
+            //break;
     }
 
-    return result;
+    if (result)
+    	return resultGroupIter;
+    else {
+    	[resultGroupIter release];
+    	return nil;
+    }
+
 }
 
 /** Handle user authentication. */
 static int handle_auth_user_pass_verify(ldap_ctx *ctx, TRLDAPConnection *ldap, TRLDAPEntry *ldapUser, const char *password) {
-    TRLDAPGroupConfig *groupConfig;
+    TRArray *groupConfigArray;
 
 	const char *auth_password = password;
+	openvpn_response resp;
 	if ([ctx->config passWordIsCR]) {
-		openvpn_response resp;
 		char *parse_error;
 		if (!extract_openvpn_cr(password, &resp, &parse_error)) {
-	        [TRLog error: "Error extracting challenge/response from password. Parse error = '%s'", 	parse_error];
-	        return (OPENVPN_PLUGIN_FUNC_ERROR);
+	        	[TRLog error: "Error extracting challenge/response from password. Parse error = '%s'", 	parse_error];
+	        	return (OPENVPN_PLUGIN_FUNC_ERROR);
 		}
 		auth_password = (const char*)resp.password;
 	}
@@ -446,11 +459,12 @@ static int handle_auth_user_pass_verify(ldap_ctx *ctx, TRLDAPConnection *ldap, T
 
     /* User authenticated, find group, if any */
     if ([ctx->config ldapGroups]) {
-        groupConfig = find_ldap_group(ldap, ctx->config, ldapUser);
-        if (!groupConfig && [ctx->config requireGroup]) {
+	groupConfigArray = find_ldap_group(ldap, ctx->config, ldapUser);
+	if (!groupConfigArray && [ctx->config requireGroup]) {
             /* No group match, and group membership is required */
             return OPENVPN_PLUGIN_FUNC_ERROR;
         } else {
+	    [groupConfigArray release];
             /* Group match! */
             return OPENVPN_PLUGIN_FUNC_SUCCESS;
         }
@@ -499,15 +513,16 @@ static BOOL pf_client_connect_disconnect(struct ldap_ctx *ctx, TRString *tableNa
 
 /** Handle both connection and disconnection events. */
 static int handle_client_connect_disconnect(ldap_ctx *ctx, TRLDAPConnection *ldap, TRLDAPEntry *ldapUser, const char *remoteAddress, BOOL connecting) {
-    TRLDAPGroupConfig *groupConfig = nil;
+    TRArray *groupConfigArray = nil;
+    TREnumerator *groupConfigIter =nil;
 #ifdef HAVE_PF
     TRString *tableName = nil;
 #endif
 
     /* Locate the group (config), if any */
     if ([ctx->config ldapGroups]) {
-        groupConfig = find_ldap_group(ldap, ctx->config, ldapUser);
-        if (!groupConfig && [ctx->config requireGroup]) {
+	groupConfigArray = find_ldap_group(ldap, ctx->config, ldapUser);
+	if (!groupConfigArray && [ctx->config requireGroup]) {
             [TRLog error: "No matching LDAP group found for user DN \"%s\", and group membership is required.", [[ldapUser dn] cString]];
             /* No group match, and group membership is required */
             return OPENVPN_PLUGIN_FUNC_ERROR;
@@ -516,15 +531,23 @@ static int handle_client_connect_disconnect(ldap_ctx *ctx, TRLDAPConnection *lda
 
 #ifdef HAVE_PF
     /* Grab the requested PF table name, if any */
-    if (groupConfig) {
-        tableName = [groupConfig pfTable];
+    if (groupConfigArray) {
+	TRLDAPGroupConfig *grConfig;
+	groupConfigIter = [groupConfigArray objectEnumerator];
+	while ((grConfig = [groupConfigIter nextObject]) != nil) {
+           tableName = [grConfig pfTable];
+           if (tableName)
+                   pf_client_connect_disconnect(ctx, tableName, remoteAddress, connecting);
+   	}
+   	[groupConfigIter release];
+   	[groupConfigArray release];
     } else {
         tableName = [ctx->config pfTable];
+	if (tableName)
+           pf_client_connect_disconnect(ctx, tableName, remoteAddress, connecting);
+
     }
 
-    if (tableName)
-        if (!pf_client_connect_disconnect(ctx, tableName, remoteAddress, connecting))
-        return OPENVPN_PLUGIN_FUNC_ERROR;
 #endif /* HAVE_PF */
 
     return OPENVPN_PLUGIN_FUNC_SUCCESS;

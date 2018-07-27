@@ -186,7 +186,7 @@ typedef struct _TRArrayStack {
  * the returned value.
  */
 - (TREnumerator *) objectEnumerator {
-        return [[[TRArrayObjectEnumerator alloc] initWithArray: self] autorelease];
+        return [[TRArrayObjectEnumerator alloc] initWithArray: self];
 }
 
 /**
