@@ -44,7 +44,6 @@
 #import <TRVPNPlugin.h>
 #import <pthread.h>
 
-#include <Foundation/NSAutoreleasePool.h>
 
 #include "openvpn-cr.h"
 
@@ -95,7 +94,7 @@ static TRString *quoteForSearch(const char *string) {
     const char specialChars[] = "*()\\"; /* RFC 2254. We don't care about NULL */
     TRString *result = [[TRString alloc] init];
     TRString *unquotedString, *part;
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    TRAutoreleasePool *pool = [[TRAutoreleasePool alloc] init];
 
     /* Make a copy of the string */
     unquotedString = [[TRString alloc] initWithCString: string];
@@ -136,7 +135,7 @@ static TRString *quoteForSearch(const char *string) {
         [unquotedString release];
     }
 
-    [pool drain];
+    [pool release];
 
     return (result);
 }
@@ -146,7 +145,7 @@ static TRString *createSearchFilter(TRString *template, const char *username) {
     TRString *result, *part;
     TRString *quotedName;
     const char userFormat[] = "%u";
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    TRAutoreleasePool *pool = [[TRAutoreleasePool alloc] init];
 
     /* Copy the template */
     templateString = [[[TRString alloc] initWithString: template] autorelease];
@@ -178,7 +177,7 @@ static TRString *createSearchFilter(TRString *template, const char *username) {
         [result appendString: templateString];
     }
 
-    [pool drain];
+    [pool release];
 
     return (result);
 }
@@ -473,7 +472,7 @@ void *async_handle_auth_user_pass_verify(void *ctx_ptr) {
     bool verified = NO;
 
     /* Per-request allocation pool. */
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    PRAutoreleasePool *pool = [[PRAutoreleasePool alloc] init];
 
     /* At the very least, we need a username to work with */
     if (!ctx->username) {
@@ -502,11 +501,11 @@ void *async_handle_auth_user_pass_verify(void *ctx_ptr) {
         goto set_acf;
     }
 
-	const char *auth_password = password;
+	const char *auth_password = ctx->password;
 	openvpn_response resp;
 	if ([ctx->config passWordIsCR]) {
 		char *parse_error;
-		if (!extract_openvpn_cr(password, &resp, &parse_error)) {
+		if (!extract_openvpn_cr(ctx->password, &resp, &parse_error)) {
 	        	[TRLog error: "Error extracting challenge/response from password. Parse error = '%s'", 	parse_error];
 	        	//return (OPENVPN_PLUGIN_FUNC_ERROR);
                 goto set_acf;

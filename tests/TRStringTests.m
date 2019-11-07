@@ -40,8 +40,7 @@
 
 #import "TRString.h"
 
-#include <Foundation/NSAutoreleasePool.h>
-
+#import "TRAutoreleasePool.h"
 #import <string.h>
 #import <limits.h>
 
@@ -102,26 +101,26 @@
 
 
 - (void) test_stringWithFormat {
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    TRAutoreleasePool *pool = [[TRAutoreleasePool alloc] init];
     TRString *str;
     
     str = [TRString stringWithFormat: "%s %s", "Hello", "World"];
     fail_unless(strcmp([str cString], "Hello World") == 0,
         "-[TRString cString] returned incorrect value. (Expected \"%s\", got \"%s\")", "Hello, World", [str cString]);
 
-    [pool drain];
+    [pool release];
 }
 
 
 - (void) test_stringWithCString {
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    TRAutoreleasePool *pool = [[TRAutoreleasePool alloc] init];
     TRString *str;
     
     str = [TRString stringWithCString: "Hello World"];
     fail_unless(strcmp([str cString], "Hello World") == 0,
         "-[TRString cString] returned incorrect value. (Expected \"%s\", got \"%s\")", "Hello, World", [str cString]);
 
-    [pool drain];
+    [pool release];
 }
 
 

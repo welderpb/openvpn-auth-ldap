@@ -26,8 +26,7 @@
  */
 #import <stdlib.h>
 
-#include <Foundation/NSAutoreleasePool.h>
-
+#import "TRAutoreleasePool.h"
 #import "PXTestCaseRunner.h"
 #import "PXTestObjC.h"
 
@@ -118,7 +117,7 @@
  * @warning This method may be modified to return a more descriptive object type in the future.
  */
 - (BOOL) runCase: (PXTestCase *) testCase {
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    TRAutoreleasePool *pool = [[TRAutoreleasePool alloc] init];
     
     Method *methods;
     unsigned int methodCount;

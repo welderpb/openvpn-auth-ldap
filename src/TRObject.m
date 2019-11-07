@@ -36,8 +36,7 @@
 #import <stdarg.h>
 
 #import "TRObject.h"
-
-#include <Foundation/NSAutoreleasePool.h>
+#import "TRAutoreleasePool.h"
 
 #import <objc/runtime.h>
 
@@ -136,7 +135,7 @@
 
 // from TRObject protocol
 - (id) autorelease {
-        [NSAutoreleasePool addObject: self];
+        [TRAutoreleasePool addObject: self];
 
         return self;
 }
