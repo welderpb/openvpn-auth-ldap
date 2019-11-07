@@ -40,10 +40,13 @@
 #import <stdint.h>
 #import <stdbool.h>
 #include <stdarg.h>
-
+#ifdef MODERN_RUNTIME
+#include <Foundation/NSObject.h>
+#else
+#import <objc/Object.h>
+#endif
 #import "PXObjCRuntime.h"
 
-#import <objc/Object.h>
 
 @protocol TRObject
 
@@ -104,8 +107,11 @@
 
 @end
 
-
+#ifdef MODERN_RUNTIME
+@interface TRObject : NSObject <TRObject> {
+#else
 @interface TRObject <TRObject> {
+#endif
 @private
     id isa;
     PXUInteger _refCount;
