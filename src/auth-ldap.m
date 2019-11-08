@@ -467,7 +467,11 @@ void *async_handle_auth_user_pass_verify(void *ctx_ptr) {
     TRLDAPConnection *ldap = nil;
     TRLDAPEntry *ldapUser = nil;
     TRString *userName;
-    TRArray *groupConfigArray;
+    TRArray *groupConfigArray = nil;
+    TREnumerator *groupConfigIter =nil;
+#ifdef HAVE_PF
+    TRString *tableName = nil;
+#endif
 
     bool verified = NO;
 
