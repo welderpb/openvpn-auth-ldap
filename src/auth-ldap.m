@@ -60,6 +60,7 @@ typedef struct ldap_ctx {
     per_client_ctx *pcc;
     char *username;
     char *password;
+    char *remoteAddress;
     const char *acf;
     pthread_t async_auth_thread;
     pthread_mutex_t ldap_ctx_lock;
@@ -532,32 +533,32 @@ void *async_handle_auth_user_pass_verify(void *ctx_ptr) {
             /* No group match, and group membership is required */
             verified = NO;
         } else {
-	    [groupConfigArray release];
             /* Group match! */
             verified = YES;
+#ifdef HAVE_PF
+            /* Grab the requested PF table name, if any */
+            if (groupConfigArray) {
+                TRLDAPGroupConfig *grConfig;
+                groupConfigIter = [groupConfigArray objectEnumerator];
+                while ((grConfig = [groupConfigIter nextObject]) != nil) {
+                   tableName = [grConfig pfTable];
+                   if (tableName)
+                           pf_client_connect_disconnect(ctx, tableName, YES);
+                }
+                [groupConfigIter release];
+                [groupConfigArray release];
+            } else {
+                tableName = [ctx->config pfTable];
+                if (tableName)
+                   pf_client_connect_disconnect(ctx, tableName, YES);
+            }
+#endif /* HAVE_PF */
+            [groupConfigArray release];
         }
     } else {
         // No groups, user OK
         verified = YES;
     }
-#ifdef HAVE_PF
-    /* Grab the requested PF table name, if any */
-    if (groupConfigArray) {
-        TRLDAPGroupConfig *grConfig;
-        groupConfigIter = [groupConfigArray objectEnumerator];
-        while ((grConfig = [groupConfigIter nextObject]) != nil) {
-           tableName = [grConfig pfTable];
-           if (tableName)
-                   pf_client_connect_disconnect(ctx, tableName, remoteAddress, connecting);
-   	    }
-   	    [groupConfigIter release];
-   	    [groupConfigArray release];
-    } else {
-        tableName = [ctx->config pfTable];
-	    if (tableName)
-           pf_client_connect_disconnect(ctx, tableName, remoteAddress, connecting);
-    }
-#endif /* HAVE_PF */
 
 set_acf:
     // Set the auth_control_file value based on success or failure.
@@ -595,27 +596,27 @@ set_acf:
 
 #ifdef HAVE_PF
 /* Add (or remove) the remote address */
-static BOOL pf_client_connect_disconnect(struct ldap_ctx *ctx, TRString *tableName, const char *remoteAddress, BOOL connecting) {
+static BOOL pf_client_connect_disconnect(struct ldap_ctx *ctx, TRString *tableName, BOOL connecting) {
     TRString *addressString;
     TRPFAddress *address;
     pferror_t pferror;
 
-    addressString = [[TRString alloc] initWithCString: remoteAddress];
+    addressString = [[TRString alloc] initWithCString: ctx->remoteAddress];
     address = [[TRPFAddress alloc] initWithPresentationAddress: addressString];
     [addressString release];
     if (connecting) {
-        [TRLog debug: "Adding address \"%s\" to packet filter table \"%s\".", remoteAddress, [tableName cString]];
+        [TRLog debug: "Adding address \"%s\" to packet filter table \"%s\".", ctx->remoteAddress, [tableName cString]];
 
         if ((pferror = [ctx->pf addAddress: address toTable: tableName]) != PF_SUCCESS) {
-            [TRLog error: "Failed to add address \"%s\" to table \"%s\": %s", remoteAddress, [tableName cString], [TRPacketFilterUtil stringForError: pferror]];
+            [TRLog error: "Failed to add address \"%s\" to table \"%s\": %s", ctx->remoteAddress, [tableName cString], [TRPacketFilterUtil stringForError: pferror]];
             [address release];
             return NO;
         }
     } else {
-        [TRLog debug: "Removing address \"%s\" from packet filter table \"%s\".", remoteAddress, [tableName cString]];
+        [TRLog debug: "Removing address \"%s\" from packet filter table \"%s\".", ctx->remoteAddress, [tableName cString]];
         if ((pferror = [ctx->pf deleteAddress: address fromTable: tableName]) != PF_SUCCESS) {
             [TRLog error: "Failed to remove address \"%s\" from table \"%s\": %s",
-                remoteAddress, [tableName cString], [TRPacketFilterUtil stringForError: pferror]];
+                ctx->remoteAddress, [tableName cString], [TRPacketFilterUtil stringForError: pferror]];
             [address release];
             return NO;
         }
@@ -660,8 +661,10 @@ OPENVPN_PLUGIN_DEF int openvpn_plugin_func_v2 (
                 // pthread_mutex_lock(&ctx->ldap_ctx_lock);
                 ctx->username = malloc(sizeof(char) * 256 + 1);
                 ctx->password = malloc(sizeof(char) * 256 + 1);
+                ctx->remoteAddress = malloc(sizeof(char) * 64 + 1);
                 strncpy(ctx->username, username, 256);
                 strncpy(ctx->password, password, 256); // really this shouldn't exceed this...
+                strncpy(ctx->remoteAddress, remoteAddress, 64); // really this shouldn't exceed this...
                 pthread_create(&ctx->async_auth_thread, NULL, &async_handle_auth_user_pass_verify, (void *) ctx);
                 ret = OPENVPN_PLUGIN_FUNC_DEFERRED;
             }
