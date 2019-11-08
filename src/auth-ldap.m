@@ -585,7 +585,7 @@ set_acf:
 
     if (pool != nil) {
         [TRLog debug: "Draining pool"];
-        [pool drain];
+        [pool release];
     }
 
     // pthread_mutex_unlock(&ctx->ldap_ctx_lock);
