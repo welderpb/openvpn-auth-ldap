@@ -610,7 +610,6 @@ void pf_client_connect_disconnect(struct ldap_ctx *ctx, TRString *tableName, BOO
         if ((pferror = [ctx->pf addAddress: address toTable: tableName]) != PF_SUCCESS) {
             [TRLog error: "Failed to add address \"%s\" to table \"%s\": %s", ctx->remoteAddress, [tableName cString], [TRPacketFilterUtil stringForError: pferror]];
             [address release];
-            return NO;
         }
     } else {
         [TRLog debug: "Removing address \"%s\" from packet filter table \"%s\".", ctx->remoteAddress, [tableName cString]];
@@ -618,7 +617,6 @@ void pf_client_connect_disconnect(struct ldap_ctx *ctx, TRString *tableName, BOO
             [TRLog error: "Failed to remove address \"%s\" from table \"%s\": %s",
                 ctx->remoteAddress, [tableName cString], [TRPacketFilterUtil stringForError: pferror]];
             [address release];
-            return NO;
         }
     }
     [address release];
