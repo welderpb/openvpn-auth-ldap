@@ -596,7 +596,7 @@ set_acf:
 
 #ifdef HAVE_PF
 /* Add (or remove) the remote address */
-static BOOL pf_client_connect_disconnect(struct ldap_ctx *ctx, TRString *tableName, BOOL connecting) {
+void pf_client_connect_disconnect(struct ldap_ctx *ctx, TRString *tableName, BOOL connecting) {
     TRString *addressString;
     TRPFAddress *address;
     pferror_t pferror;
