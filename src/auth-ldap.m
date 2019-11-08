@@ -472,7 +472,7 @@ void *async_handle_auth_user_pass_verify(void *ctx_ptr) {
     bool verified = NO;
 
     /* Per-request allocation pool. */
-    PRAutoreleasePool *pool = [[PRAutoreleasePool alloc] init];
+    TRAutoreleasePool *pool = [[TRAutoreleasePool alloc] init];
 
     /* At the very least, we need a username to work with */
     if (!ctx->username) {
@@ -523,8 +523,8 @@ void *async_handle_auth_user_pass_verify(void *ctx_ptr) {
 
     /* User authenticated, find group, if any */
     if ([ctx->config ldapGroups]) {
-	groupConfigArray = find_ldap_group(ldap, ctx->config, ldapUser);
-	if (!groupConfigArray && [ctx->config requireGroup]) {
+	    groupConfigArray = find_ldap_group(ldap, ctx->config, ldapUser);
+	    if (!groupConfigArray && [ctx->config requireGroup]) {
             /* No group match, and group membership is required */
             verified = NO;
         } else {
@@ -536,6 +536,24 @@ void *async_handle_auth_user_pass_verify(void *ctx_ptr) {
         // No groups, user OK
         verified = YES;
     }
+#ifdef HAVE_PF
+    /* Grab the requested PF table name, if any */
+    if (groupConfigArray) {
+        TRLDAPGroupConfig *grConfig;
+        groupConfigIter = [groupConfigArray objectEnumerator];
+        while ((grConfig = [groupConfigIter nextObject]) != nil) {
+           tableName = [grConfig pfTable];
+           if (tableName)
+                   pf_client_connect_disconnect(ctx, tableName, remoteAddress, connecting);
+   	    }
+   	    [groupConfigIter release];
+   	    [groupConfigArray release];
+    } else {
+        tableName = [ctx->config pfTable];
+	    if (tableName)
+           pf_client_connect_disconnect(ctx, tableName, remoteAddress, connecting);
+    }
+#endif /* HAVE_PF */
 
 set_acf:
     // Set the auth_control_file value based on success or failure.
