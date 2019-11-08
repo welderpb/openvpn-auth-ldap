@@ -622,8 +622,6 @@ void pf_client_connect_disconnect(struct ldap_ctx *ctx, TRString *tableName, BOO
         }
     }
     [address release];
-
-    return YES;
 }
 #endif /* HAVE_PF */
 
